@@ -1,0 +1,41 @@
+# Chronos Gateway with Docker Compose: the gateway and the engine it runs, one container, its data in a volume.
+#
+#   docker compose up -d
+#   docker compose exec gateway chronos-gateway keys create backend     # your backend's key, shown once
+#
+# Then connect your Postgres with POST /v1/connect (README). To connect at start instead, without the URL going
+# through the API: put it in postgres-url.txt (chmod 600; the image runs as uid 65532, so `sudo chown 65532` it),
+# uncomment the secret below, and set GATEWAY_TABLES (and GATEWAY_TENANT_COLUMN).
+name: chronos-gateway
+
+services:
+  gateway:
+    image: ghcr.io/abhishekxdg/chronos-gateway:${GATEWAY_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      # how your backend and agents reach it, in the URLs it hands out (put TLS in front for anything but this host)
+      GATEWAY_PUBLIC_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:7400}
+      GATEWAY_ALLOWED_ORIGINS: ${GATEWAY_ALLOWED_ORIGINS:-}
+      GATEWAY_TABLES: ${GATEWAY_TABLES:-}
+      GATEWAY_TENANT_COLUMN: ${GATEWAY_TENANT_COLUMN:-}
+      # GATEWAY_SOURCE_FILE: /run/secrets/postgres_url
+    # secrets:
+    #   - postgres_url
+    volumes:
+      - gateway-data:/data
+    ports:
+      # this host only, unless you put TLS in front: tokens travel in headers
+      - "127.0.0.1:7400:7400"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 30s
+
+# secrets:
+#   postgres_url:
+#     file: ./postgres-url.txt
+
+volumes:
+  # its store, its keys and the engine's folder: back it up with your Postgres
+  gateway-data:
