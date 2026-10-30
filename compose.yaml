@@ -1,11 +1,18 @@
 # Chronos Gateway with Docker Compose: the gateway and the engine it runs, one container, its data in a volume.
 #
+# On this machine:
 #   docker compose up -d
-#   docker compose exec gateway chronos-gateway keys create backend     # your backend's key, shown once
+#   docker compose logs gateway          # a setup code: open http://localhost:7400/console and enter it
 #
-# Then connect your Postgres with POST /v1/connect (README). To connect at start instead, without the URL going
-# through the API: put it in postgres-url.txt (chmod 600; the image runs as uid 65532, so `sudo chown 65532` it),
-# uncomment the secret below, and set GATEWAY_TABLES (and GATEWAY_TENANT_COLUMN).
+# On your own domain, over HTTPS (point its DNS A/AAAA record at this server; ports 80 and 443 open):
+#   GATEWAY_DOMAIN=gateway.example.com docker compose --profile https up -d
+#   docker compose logs gateway          # then open https://gateway.example.com/console and enter the code
+# Caddy gets and renews the certificate by itself (Let's Encrypt). Keep GATEWAY_DOMAIN in a .env file beside this
+# one so later `docker compose` commands use it too.
+#
+# The console sets up the rest: Postgres, the rules, keys, webhooks. To connect at start instead, without the URL
+# going through the API: put it in postgres-url.txt (chmod 600; the image runs as uid 65532, so `sudo chown 65532`
+# it), uncomment the secret below, and set GATEWAY_TABLES (and GATEWAY_TENANT_COLUMN).
 name: chronos-gateway
 
 services:
@@ -13,8 +20,10 @@ services:
     image: ghcr.io/abhishekxdg/chronos-gateway:${GATEWAY_VERSION:-latest}
     restart: unless-stopped
     environment:
-      # how your backend and agents reach it, in the URLs it hands out (put TLS in front for anything but this host)
-      GATEWAY_PUBLIC_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:7400}
+      # its domain, when it has one: the URLs it hands out are https://<domain>/...
+      GATEWAY_DOMAIN: ${GATEWAY_DOMAIN:-}
+      # or the whole public URL, when something else serves it (your own proxy, a load balancer)
+      GATEWAY_PUBLIC_URL: ${GATEWAY_PUBLIC_URL:-}
       GATEWAY_ALLOWED_ORIGINS: ${GATEWAY_ALLOWED_ORIGINS:-}
       GATEWAY_TABLES: ${GATEWAY_TABLES:-}
       GATEWAY_TENANT_COLUMN: ${GATEWAY_TENANT_COLUMN:-}
@@ -24,13 +33,32 @@ services:
     volumes:
       - gateway-data:/data
     ports:
-      # this host only, unless you put TLS in front: tokens travel in headers
+      # this host only: over the network, it's reached through HTTPS (the https profile below, or your proxy)
       - "127.0.0.1:7400:7400"
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     stop_grace_period: 30s
+
+  # HTTPS on GATEWAY_DOMAIN, certificates by themselves: `docker compose --profile https up -d`
+  https:
+    image: caddy:2.8
+    profiles: [https]
+    restart: unless-stopped
+    depends_on: [gateway]
+    command: caddy reverse-proxy --from ${GATEWAY_DOMAIN:-set-GATEWAY_DOMAIN.invalid} --to gateway:7400
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      # its certificates: kept, so a restart doesn't ask Let's Encrypt again
+      - https-data:/data
+      - https-config:/config
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
 
 # secrets:
 #   postgres_url:
@@ -39,3 +67,5 @@ services:
 volumes:
   # its store, its keys and the engine's folder: back it up with your Postgres
   gateway-data:
+  https-data:
+  https-config:
