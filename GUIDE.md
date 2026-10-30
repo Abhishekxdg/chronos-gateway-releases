@@ -10,10 +10,11 @@ unless you set up webhooks or link it to Chronos Cloud (both optional).
 
 | | |
 |---|---|
-| Current release | **0.2.0** ([release notes](https://github.com/Abhishekxdg/chronos-gateway-releases/releases)) |
+| Current release | **0.2.1** ([release notes](https://github.com/Abhishekxdg/chronos-gateway-releases/releases)) |
 | Engine it bundles | Chronos **0.4.4** ([release](https://github.com/Abhishekxdg/Chronos-DB/releases/tag/v0.4.4)) |
 | Status | Early (0.2). Try it on a staging copy of your database first. |
 | New in 0.2.0 | [The console](#the-console): set it up, review and approve, and change the rules in your browser; [your own domain](#on-your-own-domain-over-https) with HTTPS. |
+| New in 0.2.1 | Console fixes: conflicts shown row by row with by-column settling, plain-word table names, "?" rows for tables Postgres hasn't analyzed. |
 | Upgrading from 0.1.0 | Do it now: 0.1.1 fixes a security bug in tenant scoping ([Security model](#security-model)). |
 
 ## Contents
@@ -137,7 +138,7 @@ To install one exact release, use that release's own installer. It also names th
 with:
 
 ```bash
-curl -fsSL https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.0/install.sh | sudo sh -s -- --service
+curl -fsSL https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.1/install.sh | sudo sh -s -- --service
 ```
 
 Installer options:
@@ -147,7 +148,7 @@ Installer options:
 | `--service` | Install as a systemd service (Linux, root). Without it: only the binaries. |
 | `--uninstall` | Remove the service and the binaries. Keeps the data and the settings. |
 | `CHRONOS_GATEWAY_PREFIX` | Where the binaries go. Default `/usr/local` as root, else `~/.local`. |
-| `CHRONOS_GATEWAY_VERSION` | A release tag such as `v0.2.0`. Default: the release the script came from. |
+| `CHRONOS_GATEWAY_VERSION` | A release tag such as `v0.2.1`. Default: the release the script came from. |
 | `CHRONOS_GATEWAY_BASE_URL`, `CHRONOS_ENGINE_BASE_URL` | Download from a mirror instead of GitHub. |
 
 `sudo` drops environment variables, so pass them through `env`:
@@ -155,7 +156,7 @@ Installer options:
 
 ### 2. Docker
 
-The image is `ghcr.io/abhishekxdg/chronos-gateway`. Tags: `0.2.0`, `0.1.1`, `0.1.0` and `latest`, each for `linux/amd64`
+The image is `ghcr.io/abhishekxdg/chronos-gateway`. Tags: `0.2.1`, `0.2.0`, `0.1.1`, `0.1.0` and `latest`, each for `linux/amd64`
 and `linux/arm64`. It holds both programs on a distroless base (no shell), runs as user 65532, and keeps its data in
 `/data`.
 
@@ -163,7 +164,7 @@ and `linux/arm64`. It holds both programs on a distroless base (no shell), runs 
 docker run -d --name chronos-gateway --restart unless-stopped \
   -p 127.0.0.1:7400:7400 \
   -v chronos-gateway:/data \
-  ghcr.io/abhishekxdg/chronos-gateway:0.2.0
+  ghcr.io/abhishekxdg/chronos-gateway:0.2.1
 docker logs chronos-gateway     # the setup code; then open http://localhost:7400/console
 ```
 
@@ -182,7 +183,7 @@ capabilities, and the port on this machine only.
 ```bash
 mkdir chronos-gateway && cd chronos-gateway
 curl -fsSLO https://raw.githubusercontent.com/Abhishekxdg/chronos-gateway-releases/main/compose.yaml
-echo 'GATEWAY_VERSION=0.2.0' > .env
+echo 'GATEWAY_VERSION=0.2.1' > .env
 docker compose up -d
 docker compose logs gateway     # the setup code; then open http://localhost:7400/console
 ```
