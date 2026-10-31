@@ -10,12 +10,13 @@ unless you set up webhooks or link it to Chronos Cloud (both optional).
 
 | | |
 |---|---|
-| Current release | **0.2.3** ([release notes](https://github.com/Abhishekxdg/chronos-gateway-releases/releases)) |
+| Current release | **0.2.4** ([release notes](https://github.com/Abhishekxdg/chronos-gateway-releases/releases)) |
 | Engine it bundles | Chronos **0.4.5** ([release](https://github.com/Abhishekxdg/Chronos-DB/releases/tag/v0.4.5)) |
 | Status | Early (0.2). Try it on a staging copy of your database first. |
 | New in 0.2.0 | [The console](#the-console): set it up, review and approve, and change the rules in your browser; [your own domain](#on-your-own-domain-over-https) with HTTPS. |
 | New in 0.2.1 | Console fixes: conflicts shown row by row with by-column settling, plain-word table names, "?" rows for tables Postgres hasn't analyzed. |
 | New in 0.2.2 | Install fixes: the installer shows the setup code the log shows, logs without color codes under systemd and Docker, and a connection check that says what to do with a self-signed Postgres certificate. |
+| New in 0.2.4 | The connection check reads `sslmode` as libpq does, so Supabase's pooler and other providers with their own certificate authority pass it. A run held because what it read changed can be approved anyway, by a person who chooses to (`skip_read_check`; the console and the approval page ask). Attaching over 1,000,000 rows asks first. |
 | New in 0.2.3 | Neon: the connection check takes the connection string its console gives (channel binding). Runs held to a tenant can change child tables (tables that reach the tenant through a foreign key): engine 0.4.5. |
 | Upgrading from 0.1.0 | Do it now: 0.1.1 fixes a security bug in tenant scoping ([Security model](#security-model)). |
 
@@ -140,7 +141,7 @@ To install one exact release, use that release's own installer. It also names th
 with:
 
 ```bash
-curl -fsSL https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.3/install.sh | sudo sh -s -- --service
+curl -fsSL https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.4/install.sh | sudo sh -s -- --service
 ```
 
 Installer options:
@@ -150,7 +151,7 @@ Installer options:
 | `--service` | Install as a systemd service (Linux, root). Without it: only the binaries. |
 | `--uninstall` | Remove the service and the binaries. Keeps the data and the settings. |
 | `CHRONOS_GATEWAY_PREFIX` | Where the binaries go. Default `/usr/local` as root, else `~/.local`. |
-| `CHRONOS_GATEWAY_VERSION` | A release tag such as `v0.2.3`. Default: the release the script came from. |
+| `CHRONOS_GATEWAY_VERSION` | A release tag such as `v0.2.4`. Default: the release the script came from. |
 | `CHRONOS_GATEWAY_BASE_URL`, `CHRONOS_ENGINE_BASE_URL` | Download from a mirror instead of GitHub. |
 
 `sudo` drops environment variables, so pass them through `env`:
@@ -158,7 +159,7 @@ Installer options:
 
 ### 2. Docker
 
-The image is `ghcr.io/abhishekxdg/chronos-gateway`. Tags: `0.2.3`, `0.2.2`, `0.2.1`, `0.2.0`, `0.1.1`, `0.1.0` and `latest`, each for `linux/amd64`
+The image is `ghcr.io/abhishekxdg/chronos-gateway`. Tags: `0.2.4`, `0.2.3`, `0.2.2`, `0.2.1`, `0.2.0`, `0.1.1`, `0.1.0` and `latest`, each for `linux/amd64`
 and `linux/arm64`. It holds both programs on a distroless base (no shell), runs as user 65532, and keeps its data in
 `/data`.
 
@@ -166,7 +167,7 @@ and `linux/arm64`. It holds both programs on a distroless base (no shell), runs 
 docker run -d --name chronos-gateway --restart unless-stopped \
   -p 127.0.0.1:7400:7400 \
   -v chronos-gateway:/data \
-  ghcr.io/abhishekxdg/chronos-gateway:0.2.3
+  ghcr.io/abhishekxdg/chronos-gateway:0.2.4
 docker logs chronos-gateway     # the setup code; then open http://localhost:7400/console
 ```
 
@@ -185,7 +186,7 @@ capabilities, and the port on this machine only.
 ```bash
 mkdir chronos-gateway && cd chronos-gateway
 curl -fsSLO https://raw.githubusercontent.com/Abhishekxdg/chronos-gateway-releases/main/compose.yaml
-echo 'GATEWAY_VERSION=0.2.3' > .env
+echo 'GATEWAY_VERSION=0.2.4' > .env
 docker compose up -d
 docker compose logs gateway     # the setup code; then open http://localhost:7400/console
 ```
@@ -289,10 +290,11 @@ The gateway connects with that URL, reads Postgres's catalog, and forgets the UR
 - `warnings`, for example when the URL logs in as a superuser or points at a read replica (merges must write to the
   primary).
 
-This check takes `sslmode` `disable`, `prefer` or `require` only, and whenever it uses TLS it trusts only the public
-web certificate authorities. If your server's certificate comes from a private CA, the check can't connect: skip it
-and write the role from the template in step 2. Postgres as Debian and Ubuntu install it has a self-signed certificate:
-when it is on the same machine or a private network, add `sslmode=disable` to the URL for the check.
+The check reads `sslmode` as `psql` and the engine do: `prefer` (the default) and `require` encrypt without checking
+whose certificate it is, so Supabase's pooler and a Postgres with a self-signed certificate (as Debian and Ubuntu
+install it) connect as they are; `verify-ca` and `verify-full` check it, against the public web certificate
+authorities only (not `sslrootcert`). With a private CA and `verify-full`, use `sslmode=require` for the check, or
+skip it and write the role from the template in step 2.
 
 ### Step 2: make the gateway's role
 
@@ -737,7 +739,9 @@ limits to know:
 | Held, rejected, expired or discarded | Nothing. |
 
 Between refreshes an agent may read a row that is out of date. That is safe: the merge compares every row it writes
-with Postgres, and the default `check_reads = true` holds a change if a row it read has changed.
+with Postgres, and the default `check_reads = true` holds a change if a row it read has changed. A person's approval
+is checked the same way; when what the run read changed, the console and the approval page say so and let the person
+approve anyway (`skip_read_check`), which merges without that check and is recorded as `reads_checked: false`.
 
 **What is on the gateway's host.** The data folder is readable by the gateway's user only (the service makes it mode
 700).
@@ -847,7 +851,8 @@ drop them.
 |---|---|
 | `401` with "send a developer key" | The `Authorization: Bearer cgk_...` header is missing, or the token is a run or approval token. |
 | `/v1/connect/check`: "not a Postgres URL: invalid value for option `sslmode`" or "unknown option" | The check takes `sslmode` `disable`, `prefer` or `require`, and no other URL options. Drop `verify-full`, `sslrootcert` and the like for the check only. `/v1/connect` takes them. |
-| `/v1/connect/check`: a TLS or certificate error | The check trusts only the public web CAs. Postgres as Debian and Ubuntu install it has TLS on with a self-signed certificate: on the same machine or a private network, add `sslmode=disable` to the URL for the check. With a private CA, make the role from the [template](#step-2-make-the-gateways-role) and go straight to `/v1/connect`. |
+| `/v1/connect/check`: a certificate error | Only `sslmode=verify-ca` or `verify-full` checks the certificate, against the public web CAs. With a private CA or a self-signed certificate, use `sslmode=require` for the check, or make the role from the [template](#step-2-make-the-gateways-role) and go straight to `/v1/connect`. |
+| `/v1/connect`: "about N rows in all ... Send yes: true to go on" (400, code `confirm`) | Over 1,000,000 rows (Postgres's estimate), attaching asks first: the copy holds one read open on Postgres while it runs (2.5 million rows took about 30 s on a test machine). Send the same request with `"yes": true`; the console asks you. |
 | `/v1/connect`: "the server asks for the password as MD5" (or "in the clear") | Set `password_encryption = 'scram-sha-256'` and set the role's password again (`alter role chronos_gateway password '...'`), or connect with `sslmode=verify-full`. |
 | `/v1/connect`: "no CA certificates found" | `verify-full` found no system CA bundle. Add `sslrootcert=<file.pem>` with your CA, readable by the gateway's user (in Docker, mount it). |
 | `/v1/connect` in Docker can't reach a Postgres on the same machine | Inside the container, `localhost` is the container. Use `host.docker.internal` (Docker Desktop; on Linux add `--add-host=host.docker.internal:host-gateway` to `docker run`). |
@@ -857,6 +862,7 @@ drop them.
 | `429 too_many_runs`, `too_many_proposes`, or "statements a minute" | A limit from [Configuration](#configuration). A loop that never settles a conflict hits `too_many_proposes`. |
 | Propose: `409 conflict` | Rows changed in Postgres meanwhile. Proposing the same way again fails the same way: settle it (`"by_columns": true` first) or have a person approve it. |
 | Approve: `409 stale` | The run changed after the person saw it. Make a new approval link. |
+| Approve: `409 reads_changed` | Rows the run read changed after it began (an app changed them in Postgres, or another run merged), or a table it read without a narrowing filter has more than 100,000 rows to check. Nothing was written. Reject it and start a new run, or approve with `skip_read_check: true` (the console and the approval page ask) to merge without that check: the rows it changed are still checked. |
 | Approval link: `410 expired` or `409 used` | Make a new link with `POST /v1/runs/:id/approvals`. |
 | The widget doesn't load or its calls fail | The browser must reach `GATEWAY_PUBLIC_URL`, and your site's origin must be in `GATEWAY_ALLOWED_ORIGINS`. |
 | Log warning "listening on 0.0.0.0:7400 over plain HTTP" in Docker | Expected inside the container. It is fine while the port is published to `127.0.0.1` only. Put TLS in front and set an `https://` `GATEWAY_PUBLIC_URL` before exposing it. |
