@@ -10,12 +10,13 @@ unless you set up webhooks or link it to Chronos Cloud (both optional).
 
 | | |
 |---|---|
-| Current release | **0.2.2** ([release notes](https://github.com/Abhishekxdg/chronos-gateway-releases/releases)) |
-| Engine it bundles | Chronos **0.4.4** ([release](https://github.com/Abhishekxdg/Chronos-DB/releases/tag/v0.4.4)) |
+| Current release | **0.2.3** ([release notes](https://github.com/Abhishekxdg/chronos-gateway-releases/releases)) |
+| Engine it bundles | Chronos **0.4.5** ([release](https://github.com/Abhishekxdg/Chronos-DB/releases/tag/v0.4.5)) |
 | Status | Early (0.2). Try it on a staging copy of your database first. |
 | New in 0.2.0 | [The console](#the-console): set it up, review and approve, and change the rules in your browser; [your own domain](#on-your-own-domain-over-https) with HTTPS. |
 | New in 0.2.1 | Console fixes: conflicts shown row by row with by-column settling, plain-word table names, "?" rows for tables Postgres hasn't analyzed. |
 | New in 0.2.2 | Install fixes: the installer shows the setup code the log shows, logs without color codes under systemd and Docker, and a connection check that says what to do with a self-signed Postgres certificate. |
+| New in 0.2.3 | Neon: the connection check takes the connection string its console gives (channel binding). Runs held to a tenant can change child tables (tables that reach the tenant through a foreign key): engine 0.4.5. |
 | Upgrading from 0.1.0 | Do it now: 0.1.1 fixes a security bug in tenant scoping ([Security model](#security-model)). |
 
 ## Contents
@@ -90,7 +91,7 @@ The gateway is two programs:
 |---|---|
 | Machine | Linux on x86-64 or arm64 for the installer. The x86-64 build needs an x86-64-v2 CPU (POPCNT, SSE4.2): nearly any server CPU from the last decade. Anything that runs Docker for the image (`linux/amd64`, `linux/arm64`). There is no macOS build: use Docker there. |
 | Installer | `curl`, `tar`, and `sha256sum` or `shasum`. For `--service`: root, systemd and `useradd`. |
-| Postgres | 12 or newer: 12 to 18 are tested, and Supabase through its pooler. The connection check refuses 11 or older, saying so. The gateway's host must reach it. |
+| Postgres | 12 or newer: 12 to 18 are tested, Supabase through its pooler, and Neon (its connection string as the console gives it, pooled or direct). The connection check refuses 11 or older, saying so. The gateway's host must reach it. |
 | Tables | Each table you attach needs a primary key, or a unique index on NOT NULL columns to stand for one (no `WHERE`, no expressions, not deferrable). Views and tables in an inheritance tree (`INHERITS`) are refused (the connection check lists which, and why). A partitioned table is attached whole, as one table holding its partitions' rows: the check lists it (`partitioned`), not its partitions, and Postgres puts each row an agent's merge writes in its partition. Generated columns are attached: Postgres works them out (the check lists them as `generated`), and an agent can't write them. A table with row-level security on (Supabase turns it on for every table) is attached when the engine's role reads every row: the check's `role_sql` gives `chronos_gateway` a policy that does (`USING (true) WITH CHECK (true)`), and your app's policies keep holding everyone else. One with a restrictive policy for every role is refused. Needs chronosdb-engine 0.4.4 or later (gateway 0.2.0 bundles it); an older engine refuses every table with row-level security on. |
 | Database admin | Once, someone who can create a role and grant rights on the tables, to make the gateway's own least-privilege role. |
 | Disk | Room for a copy of the tables you attach, in the gateway's data folder. |
@@ -139,7 +140,7 @@ To install one exact release, use that release's own installer. It also names th
 with:
 
 ```bash
-curl -fsSL https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.2/install.sh | sudo sh -s -- --service
+curl -fsSL https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.3/install.sh | sudo sh -s -- --service
 ```
 
 Installer options:
@@ -149,7 +150,7 @@ Installer options:
 | `--service` | Install as a systemd service (Linux, root). Without it: only the binaries. |
 | `--uninstall` | Remove the service and the binaries. Keeps the data and the settings. |
 | `CHRONOS_GATEWAY_PREFIX` | Where the binaries go. Default `/usr/local` as root, else `~/.local`. |
-| `CHRONOS_GATEWAY_VERSION` | A release tag such as `v0.2.2`. Default: the release the script came from. |
+| `CHRONOS_GATEWAY_VERSION` | A release tag such as `v0.2.3`. Default: the release the script came from. |
 | `CHRONOS_GATEWAY_BASE_URL`, `CHRONOS_ENGINE_BASE_URL` | Download from a mirror instead of GitHub. |
 
 `sudo` drops environment variables, so pass them through `env`:
@@ -157,7 +158,7 @@ Installer options:
 
 ### 2. Docker
 
-The image is `ghcr.io/abhishekxdg/chronos-gateway`. Tags: `0.2.2`, `0.2.1`, `0.2.0`, `0.1.1`, `0.1.0` and `latest`, each for `linux/amd64`
+The image is `ghcr.io/abhishekxdg/chronos-gateway`. Tags: `0.2.3`, `0.2.2`, `0.2.1`, `0.2.0`, `0.1.1`, `0.1.0` and `latest`, each for `linux/amd64`
 and `linux/arm64`. It holds both programs on a distroless base (no shell), runs as user 65532, and keeps its data in
 `/data`.
 
@@ -165,7 +166,7 @@ and `linux/arm64`. It holds both programs on a distroless base (no shell), runs 
 docker run -d --name chronos-gateway --restart unless-stopped \
   -p 127.0.0.1:7400:7400 \
   -v chronos-gateway:/data \
-  ghcr.io/abhishekxdg/chronos-gateway:0.2.2
+  ghcr.io/abhishekxdg/chronos-gateway:0.2.3
 docker logs chronos-gateway     # the setup code; then open http://localhost:7400/console
 ```
 
@@ -184,7 +185,7 @@ capabilities, and the port on this machine only.
 ```bash
 mkdir chronos-gateway && cd chronos-gateway
 curl -fsSLO https://raw.githubusercontent.com/Abhishekxdg/chronos-gateway-releases/main/compose.yaml
-echo 'GATEWAY_VERSION=0.2.2' > .env
+echo 'GATEWAY_VERSION=0.2.3' > .env
 docker compose up -d
 docker compose logs gateway     # the setup code; then open http://localhost:7400/console
 ```
