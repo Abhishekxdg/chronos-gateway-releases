@@ -197,6 +197,12 @@ More in [Use it from your code](GUIDE.md#use-it-from-your-code) and
   subqueries and `set row_security = off` included.
 - **Your rules, as a merge policy.** Max rows, max deletes, rows per hour per tenant, how stale the work may be,
   reads checked against Postgres. [Configure them](GUIDE.md#configuration).
+- **Reads checked per tenant.** A run is held when what it read changed, and only its own tenant's rows count:
+  another customer's edits never hold it. A person can still approve a run whose reads changed, on purpose, and it's
+  recorded that way.
+- **Fresh within a second, if you like.** With `GATEWAY_FOLLOW=on` the engine takes your app's changes about a
+  second after they commit, through a logical replication slot. Otherwise it reads them every 5 minutes
+  (`GATEWAY_REFRESH_EVERY`). [Configuration](GUIDE.md#configuration).
 - **An admin console** at `/console`: review held changes row by row and approve all or part, set the rules as a
   form, make keys, add webhooks. Sign in with a key or your SSO. [The console](GUIDE.md#the-console).
 - **Changes in plain words** for whoever approves, with columns you choose to hide.
@@ -205,6 +211,7 @@ More in [Use it from your code](GUIDE.md#use-it-from-your-code) and
   superuser.
 - **Your network, your data.** No account, no phone-home. Optional link to Chronos Cloud for a dashboard.
 - **Works with the Postgres you run:** 12 or newer, wherever it's hosted, as long as the gateway can reach it.
+  Tested on 12 to 18, Supabase (through its pooler) and Neon (pooled or direct, and waking from a suspend).
 
 ## Docs
 
@@ -228,7 +235,7 @@ own when you'd rather drive it directly, over the Postgres wire protocol or MCP:
 
 ## Status
 
-Early (0.1). Try it on a staging copy of your database first, and
+Early: 0.2.5, on Chronos DB 0.4.6. Try it on a staging copy of your database first, and
 [open an issue](https://github.com/Abhishekxdg/chronos-gateway-releases/issues) when something surprises you.
 
 Source-available under [BUSL-1.1](LICENSE). Downloads are the installer, static Linux binaries (x86-64 and arm64)
