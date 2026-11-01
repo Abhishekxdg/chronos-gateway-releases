@@ -79,8 +79,8 @@ docker logs chronos-gateway     # a setup code: open http://localhost:7400/conso
 curl -fsSL https://github.com/Abhishekxdg/chronos-gateway-releases/releases/latest/download/install.sh | sudo sh -s -- --service
 ```
 
-It checks every download against `SHA256SUMS`, installs a systemd service, and prints the console's address and a
-setup code.
+It checks every download against `SHA256SUMS` (and its cosign signature, with `CHRONOS_VERIFY=1`), installs a
+systemd service, and prints the console's address and a setup code.
 [Read the script first](GUIDE.md#1-the-installer-linux) if you like.
 
 ### Docker Compose, on your own domain with HTTPS
@@ -235,7 +235,7 @@ own when you'd rather drive it directly, over the Postgres wire protocol or MCP:
 
 ## Status
 
-Early: 0.2.5, on Chronos DB 0.4.6. Try it on a staging copy of your database first, and
+Early: 0.2.6, on Chronos DB 0.4.6. Try it on a staging copy of your database first, and
 [open an issue](https://github.com/Abhishekxdg/chronos-gateway-releases/issues) when something surprises you.
 
 Source-available under [BUSL-1.1](LICENSE). Downloads are the installer, static Linux binaries (x86-64 and arm64)

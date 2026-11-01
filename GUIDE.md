@@ -10,12 +10,13 @@ unless you set up webhooks or link it to Chronos Cloud (both optional).
 
 | | |
 |---|---|
-| Current release | **0.2.5** ([release notes](https://github.com/Abhishekxdg/chronos-gateway-releases/releases)) |
+| Current release | **0.2.6** ([release notes](https://github.com/Abhishekxdg/chronos-gateway-releases/releases)) |
 | Engine it bundles | Chronos **0.4.6** ([release](https://github.com/Abhishekxdg/Chronos-DB/releases/tag/v0.4.6)) |
 | Status | Early (0.2). Try it on a staging copy of your database first. |
 | New in 0.2.0 | [The console](#the-console): set it up, review and approve, and change the rules in your browser; [your own domain](#on-your-own-domain-over-https) with HTTPS. |
 | New in 0.2.1 | Console fixes: conflicts shown row by row with by-column settling, plain-word table names, "?" rows for tables Postgres hasn't analyzed. |
 | New in 0.2.2 | Install fixes: the installer shows the setup code the log shows, logs without color codes under systemd and Docker, and a connection check that says what to do with a self-signed Postgres certificate. |
+| New in 0.2.6 | Signed downloads: each binary and the image are signed with cosign (keyless, Sigstore) by Chronos's release account. `CHRONOS_VERIFY=1` makes the installer check the signatures of both the gateway and its engine; [check the image](#check-the-images-signature) with `cosign verify`. |
 | New in 0.2.5 | A run is held only by its own tenant's rows (engine 0.4.6): another tenant's rows changing, in Postgres or by a refresh, no longer hold a run that read the same tables, and a run that read a child table of more than 100,000 rows can be checked, so it needs no `skip_read_check`. |
 | New in 0.2.4 | The connection check reads `sslmode` as libpq does, so Supabase's pooler and other providers with their own certificate authority pass it. A run held because what it read changed can be approved anyway, by a person who chooses to (`skip_read_check`; the console and the approval page ask). Attaching over 1,000,000 rows asks first. |
 | New in 0.2.3 | Neon: the connection check takes the connection string its console gives (channel binding). Runs held to a tenant can change child tables (tables that reach the tenant through a foreign key): engine 0.4.5. |
@@ -92,7 +93,7 @@ The gateway is two programs:
 | | |
 |---|---|
 | Machine | Linux on x86-64 or arm64 for the installer. The x86-64 build needs an x86-64-v2 CPU (POPCNT, SSE4.2): nearly any server CPU from the last decade. Anything that runs Docker for the image (`linux/amd64`, `linux/arm64`). There is no macOS build: use Docker there. |
-| Installer | `curl`, `tar`, and `sha256sum` or `shasum`. For `--service`: root, systemd and `useradd`. |
+| Installer | `curl`, `tar`, and `sha256sum` or `shasum`. For `--service`: root, systemd and `useradd`. For `CHRONOS_VERIFY=1`: [cosign](https://docs.sigstore.dev/cosign/system_config/installation/). |
 | Postgres | 12 or newer: 12 to 18 are tested, Supabase through its pooler, and Neon (its connection string as the console gives it, pooled or direct). The connection check refuses 11 or older, saying so. The gateway's host must reach it. |
 | Tables | Each table you attach needs a primary key, or a unique index on NOT NULL columns to stand for one (no `WHERE`, no expressions, not deferrable). Views and tables in an inheritance tree (`INHERITS`) are refused (the connection check lists which, and why). A partitioned table is attached whole, as one table holding its partitions' rows: the check lists it (`partitioned`), not its partitions, and Postgres puts each row an agent's merge writes in its partition. Generated columns are attached: Postgres works them out (the check lists them as `generated`), and an agent can't write them. A table with row-level security on (Supabase turns it on for every table) is attached when the engine's role reads every row: the check's `role_sql` gives `chronos_gateway` a policy that does (`USING (true) WITH CHECK (true)`), and your app's policies keep holding everyone else. One with a restrictive policy for every role is refused. Needs chronosdb-engine 0.4.4 or later (gateway 0.2.0 bundles it); an older engine refuses every table with row-level security on. |
 | Database admin | Once, someone who can create a role and grant rights on the tables, to make the gateway's own least-privilege role. |
@@ -125,7 +126,9 @@ curl -fsSL https://github.com/Abhishekxdg/chronos-gateway-releases/releases/late
 What the installer does, in order:
 
 1. Downloads the gateway and its engine for your CPU.
-2. Checks each download against the `SHA256SUMS` file of its release. On a mismatch it stops and installs nothing.
+2. Checks each download against the `SHA256SUMS` file of its release. With `CHRONOS_VERIFY=1` it also checks each
+   one's cosign signature: made by Chronos's release account, through Google's sign-in. On a mismatch or a missing
+   signature it stops and installs nothing.
 3. Runs both binaries once (`--version`), so a build that can't run on this machine is never put in place.
 4. Moves them into place. With `--service`, writes the systemd unit and settings, starts the service, and waits
    until it answers.
@@ -142,7 +145,7 @@ To install one exact release, use that release's own installer. It also names th
 with:
 
 ```bash
-curl -fsSL https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.5/install.sh | sudo sh -s -- --service
+curl -fsSL https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.6/install.sh | sudo sh -s -- --service
 ```
 
 Installer options:
@@ -152,7 +155,8 @@ Installer options:
 | `--service` | Install as a systemd service (Linux, root). Without it: only the binaries. |
 | `--uninstall` | Remove the service and the binaries. Keeps the data and the settings. |
 | `CHRONOS_GATEWAY_PREFIX` | Where the binaries go. Default `/usr/local` as root, else `~/.local`. |
-| `CHRONOS_GATEWAY_VERSION` | A release tag such as `v0.2.5`. Default: the release the script came from. |
+| `CHRONOS_GATEWAY_VERSION` | A release tag such as `v0.2.6`. Default: the release the script came from. |
+| `CHRONOS_VERIFY=1` | Also check each download's signature with cosign (gateway 0.2.6 and later; the engine it bundles is signed too). |
 | `CHRONOS_GATEWAY_BASE_URL`, `CHRONOS_ENGINE_BASE_URL` | Download from a mirror instead of GitHub. |
 
 `sudo` drops environment variables, so pass them through `env`:
@@ -160,7 +164,7 @@ Installer options:
 
 ### 2. Docker
 
-The image is `ghcr.io/abhishekxdg/chronos-gateway`. Tags: `0.2.5`, `0.2.4`, `0.2.3`, `0.2.2`, `0.2.1`, `0.2.0`, `0.1.1`, `0.1.0` and `latest`, each for `linux/amd64`
+The image is `ghcr.io/abhishekxdg/chronos-gateway`. Tags: `0.2.6`, `0.2.5`, `0.2.4`, `0.2.3`, `0.2.2`, `0.2.1`, `0.2.0`, `0.1.1`, `0.1.0` and `latest`, each for `linux/amd64`
 and `linux/arm64`. It holds both programs on a distroless base (no shell), runs as user 65532, and keeps its data in
 `/data`.
 
@@ -168,7 +172,7 @@ and `linux/arm64`. It holds both programs on a distroless base (no shell), runs 
 docker run -d --name chronos-gateway --restart unless-stopped \
   -p 127.0.0.1:7400:7400 \
   -v chronos-gateway:/data \
-  ghcr.io/abhishekxdg/chronos-gateway:0.2.5
+  ghcr.io/abhishekxdg/chronos-gateway:0.2.6
 docker logs chronos-gateway     # the setup code; then open http://localhost:7400/console
 ```
 
@@ -179,6 +183,16 @@ docker logs chronos-gateway     # the setup code; then open http://localhost:740
 - `-v chronos-gateway:/data` keeps the data in a named volume. If you mount a host folder instead, make it owned by
   uid 65532.
 
+#### Check the image's signature
+
+From 0.2.6, each image is signed with cosign (keyless) by Chronos's release account. To check it before you run it:
+
+```bash
+cosign verify ghcr.io/abhishekxdg/chronos-gateway:0.2.6 \
+  --certificate-identity chronos-release@project-7a947b34-cb98-4716-8f2.iam.gserviceaccount.com \
+  --certificate-oidc-issuer https://accounts.google.com
+```
+
 ### 3. Docker Compose
 
 This repository's [`compose.yaml`](compose.yaml) runs the same image with a read-only root filesystem, no Linux
@@ -187,7 +201,7 @@ capabilities, and the port on this machine only.
 ```bash
 mkdir chronos-gateway && cd chronos-gateway
 curl -fsSLO https://raw.githubusercontent.com/Abhishekxdg/chronos-gateway-releases/main/compose.yaml
-echo 'GATEWAY_VERSION=0.2.5' > .env
+echo 'GATEWAY_VERSION=0.2.6' > .env
 docker compose up -d
 docker compose logs gateway     # the setup code; then open http://localhost:7400/console
 ```
