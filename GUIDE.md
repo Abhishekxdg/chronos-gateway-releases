@@ -806,7 +806,7 @@ image is pushed with build provenance and an SBOM.
   webhook delivery. A request with a W3C `traceparent` header joins the caller's trace. `OTEL_SERVICE_NAME` defaults
   to `chronos-gateway`. Unset, nothing is sent.
 - **Audit trail to a SIEM:** every run, hold, approval, merge and rejection is an event. Point a webhook at your
-  log pipeline (each delivery is signed, see [Webhooks](api.md)), or read them with `GET /v1/events`.
+  log pipeline (each delivery is signed, see [Approve a held change](#approve-a-held-change)), or read them with `GET /v1/events`.
 - **Staying up:** run one gateway per data folder. The store and the engine's folder are on local disk, and the
   engine holds a lock on its folder, so two gateways can't share one. Keep it available by restarting it fast, on
   the same data:
