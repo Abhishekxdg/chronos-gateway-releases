@@ -10,12 +10,13 @@ unless you set up webhooks or link it to Chronos Cloud (both optional).
 
 | | |
 |---|---|
-| Current release | **0.2.4** ([release notes](https://github.com/Abhishekxdg/chronos-gateway-releases/releases)) |
-| Engine it bundles | Chronos **0.4.5** ([release](https://github.com/Abhishekxdg/Chronos-DB/releases/tag/v0.4.5)) |
+| Current release | **0.2.5** ([release notes](https://github.com/Abhishekxdg/chronos-gateway-releases/releases)) |
+| Engine it bundles | Chronos **0.4.6** ([release](https://github.com/Abhishekxdg/Chronos-DB/releases/tag/v0.4.6)) |
 | Status | Early (0.2). Try it on a staging copy of your database first. |
 | New in 0.2.0 | [The console](#the-console): set it up, review and approve, and change the rules in your browser; [your own domain](#on-your-own-domain-over-https) with HTTPS. |
 | New in 0.2.1 | Console fixes: conflicts shown row by row with by-column settling, plain-word table names, "?" rows for tables Postgres hasn't analyzed. |
 | New in 0.2.2 | Install fixes: the installer shows the setup code the log shows, logs without color codes under systemd and Docker, and a connection check that says what to do with a self-signed Postgres certificate. |
+| New in 0.2.5 | A run is held only by its own tenant's rows (engine 0.4.6): another tenant's rows changing, in Postgres or by a refresh, no longer hold a run that read the same tables, and a run that read a child table of more than 100,000 rows can be checked, so it needs no `skip_read_check`. |
 | New in 0.2.4 | The connection check reads `sslmode` as libpq does, so Supabase's pooler and other providers with their own certificate authority pass it. A run held because what it read changed can be approved anyway, by a person who chooses to (`skip_read_check`; the console and the approval page ask). Attaching over 1,000,000 rows asks first. |
 | New in 0.2.3 | Neon: the connection check takes the connection string its console gives (channel binding). Runs held to a tenant can change child tables (tables that reach the tenant through a foreign key): engine 0.4.5. |
 | Upgrading from 0.1.0 | Do it now: 0.1.1 fixes a security bug in tenant scoping ([Security model](#security-model)). |
@@ -141,7 +142,7 @@ To install one exact release, use that release's own installer. It also names th
 with:
 
 ```bash
-curl -fsSL https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.4/install.sh | sudo sh -s -- --service
+curl -fsSL https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.5/install.sh | sudo sh -s -- --service
 ```
 
 Installer options:
@@ -151,7 +152,7 @@ Installer options:
 | `--service` | Install as a systemd service (Linux, root). Without it: only the binaries. |
 | `--uninstall` | Remove the service and the binaries. Keeps the data and the settings. |
 | `CHRONOS_GATEWAY_PREFIX` | Where the binaries go. Default `/usr/local` as root, else `~/.local`. |
-| `CHRONOS_GATEWAY_VERSION` | A release tag such as `v0.2.4`. Default: the release the script came from. |
+| `CHRONOS_GATEWAY_VERSION` | A release tag such as `v0.2.5`. Default: the release the script came from. |
 | `CHRONOS_GATEWAY_BASE_URL`, `CHRONOS_ENGINE_BASE_URL` | Download from a mirror instead of GitHub. |
 
 `sudo` drops environment variables, so pass them through `env`:
@@ -159,7 +160,7 @@ Installer options:
 
 ### 2. Docker
 
-The image is `ghcr.io/abhishekxdg/chronos-gateway`. Tags: `0.2.4`, `0.2.3`, `0.2.2`, `0.2.1`, `0.2.0`, `0.1.1`, `0.1.0` and `latest`, each for `linux/amd64`
+The image is `ghcr.io/abhishekxdg/chronos-gateway`. Tags: `0.2.5`, `0.2.4`, `0.2.3`, `0.2.2`, `0.2.1`, `0.2.0`, `0.1.1`, `0.1.0` and `latest`, each for `linux/amd64`
 and `linux/arm64`. It holds both programs on a distroless base (no shell), runs as user 65532, and keeps its data in
 `/data`.
 
@@ -167,7 +168,7 @@ and `linux/arm64`. It holds both programs on a distroless base (no shell), runs 
 docker run -d --name chronos-gateway --restart unless-stopped \
   -p 127.0.0.1:7400:7400 \
   -v chronos-gateway:/data \
-  ghcr.io/abhishekxdg/chronos-gateway:0.2.4
+  ghcr.io/abhishekxdg/chronos-gateway:0.2.5
 docker logs chronos-gateway     # the setup code; then open http://localhost:7400/console
 ```
 
@@ -186,7 +187,7 @@ capabilities, and the port on this machine only.
 ```bash
 mkdir chronos-gateway && cd chronos-gateway
 curl -fsSLO https://raw.githubusercontent.com/Abhishekxdg/chronos-gateway-releases/main/compose.yaml
-echo 'GATEWAY_VERSION=0.2.4' > .env
+echo 'GATEWAY_VERSION=0.2.5' > .env
 docker compose up -d
 docker compose logs gateway     # the setup code; then open http://localhost:7400/console
 ```
