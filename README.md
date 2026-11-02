@@ -119,7 +119,7 @@ lists the rest. Every option, including pinning a version and running without ro
 </tr>
 </table>
 
-These pictures show the console of 0.2.6 on made-up data.
+These pictures show the console of 0.2.7 on made-up data.
 
 ## Your first agent in 5 minutes
 
@@ -255,7 +255,7 @@ own when you'd rather drive it directly, over the Postgres wire protocol or MCP:
 
 ## Status
 
-Early: 0.2.6, on Chronos DB 0.4.6. Try it on a staging copy of your database first, and
+Early: 0.2.7, on Chronos DB 0.4.6. Try it on a staging copy of your database first, and
 [open an issue](https://github.com/Abhishekxdg/chronos-gateway-releases/issues) when something surprises you.
 
 Source-available under [BUSL-1.1](LICENSE). Downloads are the installer, static Linux binaries (x86-64 and arm64)
