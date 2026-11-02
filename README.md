@@ -1,25 +1,21 @@
+<h1 align="center"><img src="docs/assets/readme/banner.png" alt="Chronos Gateway. Let AI agents change your Postgres, without letting them touch it." width="100%"></h1>
+
 <div align="center">
-
-# Chronos Gateway
-
-**Let AI agents change your Postgres, without letting them touch it.**
 
 Every agent gets its own private copy of its customer's rows. It can read, write and delete there all day.
 Nothing reaches your database until the change passes your rules, and the rows it touches still match what's live.
 Anything risky waits for a person to click **Approve**.
 
-[![Release](https://img.shields.io/github/v/release/Abhishekxdg/chronos-gateway-releases?label=release)](https://github.com/Abhishekxdg/chronos-gateway-releases/releases/latest)
-[![Image](https://img.shields.io/badge/ghcr.io-chronos--gateway-blue?logo=docker)](https://github.com/users/Abhishekxdg/packages/container/package/chronos-gateway)
-[![Postgres 12+](https://img.shields.io/badge/Postgres-12%2B-336791?logo=postgresql&logoColor=white)](GUIDE.md#requirements)
-[![License: BUSL-1.1](https://img.shields.io/badge/license-BUSL--1.1-lightgrey)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/Abhishekxdg/chronos-gateway-releases?label=release&style=flat-square&labelColor=050505&color=c8ff2e)](https://github.com/Abhishekxdg/chronos-gateway-releases/releases/latest)
+[![Image](https://img.shields.io/badge/ghcr.io-chronos--gateway-2c2c2c?style=flat-square&labelColor=050505&logo=docker&logoColor=f2f2ee)](https://github.com/users/Abhishekxdg/packages/container/package/chronos-gateway)
+[![Postgres 12+](https://img.shields.io/badge/Postgres-12%2B-2c2c2c?style=flat-square&labelColor=050505&logo=postgresql&logoColor=f2f2ee)](GUIDE.md#requirements)
+[![License: BUSL-1.1](https://img.shields.io/badge/license-BUSL--1.1-2c2c2c?style=flat-square&labelColor=050505)](LICENSE)
 
 [**Deploy in 1 minute**](#deploy-in-1-minute) · [**Try it in 5**](#your-first-agent-in-5-minutes) ·
 [**Setup guide**](GUIDE.md) · [**API**](GUIDE.md#api-at-a-glance) ·
 [**Chronos DB**](https://github.com/Abhishekxdg/Chronos-DB)
 
 </div>
-
----
 
 ## Why
 
@@ -39,6 +35,11 @@ it.
 
 ## How it works
 
+<p align="center"><img src="docs/assets/readme/scene.png" alt="An isometric drawing of Chronos Gateway between a product's agents and its Postgres. Agents from the Claude Agent SDK, LangChain or any MCP client reach a world per run, one tenant each, and hold no Postgres credential. Changes reach Postgres as a checked write, or ask the end user first. The product's app keeps talking to Postgres as it does today." width="820"></p>
+
+<details>
+<summary>The same, as text</summary>
+
 ```
  your app ─────────────── reads and writes, as today ──────────────────> Postgres
                                                                             ^
@@ -50,12 +51,16 @@ it.
                                                     └─> rejected ──> dropped
 ```
 
+</details>
+
 1. **Start a run** for one tenant. You get a token to hand the agent.
 2. **The agent works** over SQL or MCP, in its own world: a copy holding only that tenant's rows.
 3. **Propose.** Within your rules (by default: no deletes, at most 500 rows), it's written to Postgres in one checked
    transaction. Otherwise it's **held** for a person: your team through the API, or your own end user through a
    drop-in `<chronos-approve>` widget.
 4. **Webhooks** tell your backend what landed, what's held, and what conflicted.
+
+<p align="center"><img src="docs/assets/readme/run-on-the-wire.png" alt="One run as a sequence between your backend, the gateway, the agent, Postgres and the end user. The backend starts a run for tenant 42 and a world opens with that tenant's rows only. The agent gets an hour-long run token with no Postgres credential, and reads and writes its world over SQL or MCP. The backend proposes. Within the rules, the gateway writes one checked transaction to Postgres. If a rule is broken, the end user is asked through the chronos-approve widget, and on Approve the change is written, checked. A merge.landed webhook goes back to the backend." width="820"></p>
 
 More in [How it works](GUIDE.md#how-it-works).
 
@@ -102,6 +107,19 @@ Leave out the domain and `--profile https` to run it on this machine only.
 Open the console, enter the setup code from the log, and it makes your first key and signs you in. **Get started**
 lists the rest. Every option, including pinning a version and running without root:
 [Install](GUIDE.md#install), [Set it up in the console](GUIDE.md#set-it-up-in-the-console).
+
+<table>
+<tr>
+<td width="50%" valign="top"><a href="docs/assets/readme/console-review.png"><img src="docs/assets/readme/console-review.png" alt="The console's Review page: two held runs, and one open showing why it waits (it deletes 1 row, at most 0 allowed) and what it changes in words: change the score of lead Hooli from 0.1 to 8.5, and remove lead Hooli, with Turn down and Approve and merge buttons"></a><br><b>Review.</b> Each held change in words and rows. Approve it or turn it down.</td>
+<td width="50%" valign="top"><a href="docs/assets/readme/console-overview.png"><img src="docs/assets/readme/console-overview.png" alt="The console's Overview page: counts of runs waiting for review, working and merged, the gateway's health, the rules in one sentence, and recent activity"></a><br><b>Overview.</b> What agents are doing, and what's waiting for you.</td>
+</tr>
+<tr>
+<td width="50%" valign="top"><a href="docs/assets/readme/console-rules.png"><img src="docs/assets/readme/console-rules.png" alt="The console's Policy page: the merge rules in one sentence, and a form for rows changed, rows deleted, rows per tenant per hour and how old a run may be"></a><br><b>Policy.</b> Your rules as a form, in force in the engine as soon as you save.</td>
+<td width="50%" valign="top"><a href="docs/assets/readme/console-runs.png"><img src="docs/assets/readme/console-runs.png" alt="The console's Runs page: a table of agent runs with intent, status (open, held, merged, rejected), tenant and end user"></a><br><b>Runs.</b> Every run, one task for one tenant, with its outcome.</td>
+</tr>
+</table>
+
+These pictures show the console of 0.2.6 on made-up data.
 
 ## Your first agent in 5 minutes
 
@@ -187,6 +205,8 @@ Let your own users approve, right in your product:
 <script src="https://gateway.example.com/widget.js"></script>
 <chronos-approve base="https://gateway.example.com" token="cga_..."></chronos-approve>
 ```
+
+<p align="center"><img src="docs/assets/readme/approve-widget.png" alt="The approval widget: review this change, remove the duplicate Hooli lead and tidy its twin, one lead changed and one removed, each described in words, with a note field and Approve and Turn down buttons" width="520"></p>
 
 More in [Use it from your code](GUIDE.md#use-it-from-your-code) and
 [Approve a held change](GUIDE.md#approve-a-held-change).
