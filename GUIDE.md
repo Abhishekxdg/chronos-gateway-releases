@@ -553,8 +553,8 @@ Everything it does goes through the same API as your backend, and the engine sti
 | Overview | Engine health, what is attached, runs held and merged, webhook backlog. |
 | Review | Held runs and conflicts, newest first. Each change in words and rows (before and after). Approve all of it, only some tables, or reject it with a reason; send it to someone else as an approval link. Keys: `j`/`k` move, `a` approves, `r` rejects. |
 | Runs | Every run, by status, with its outcome; discard one still open. |
-| Rules | The merge policy as a form, with what it means in plain words. Saving applies it to the engine at once. Loosening a rule asks you first. |
-| Data | Names for tables and columns in approvals, and columns hidden from them. |
+| Policy | The merge policy as a form, with what it means in plain words. Saving applies it to the engine at once. Loosening a rule asks you first. |
+| Data & labels | Names for tables and columns in approvals, and columns hidden from them. |
 | Webhooks | Add one (its signing secret is shown once) or remove it. |
 | Keys | Make developer keys (each shown once) and revoke them. |
 | Connect | Check a Postgres, copy the SQL for the gateway's role, attach tables. |
