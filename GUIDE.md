@@ -10,13 +10,13 @@ unless you set up webhooks or link it to Chronos Cloud (both optional).
 
 | | |
 |---|---|
-| Current release | **0.2.8** ([release notes](https://github.com/Abhishekxdg/chronos-gateway-releases/releases)) |
+| Current release | **0.2.9** ([release notes](https://github.com/Abhishekxdg/chronos-gateway-releases/releases)) |
 | Engine it bundles | Chronos **0.4.8** ([release](https://github.com/Abhishekxdg/Chronos-DB/releases/tag/v0.4.8)) |
 | Status | Early (0.2). Try it on a staging copy of your database first. |
 | New in 0.2.0 | [The console](#the-console): set it up, review and approve, and change the rules in your browser; [your own domain](#on-your-own-domain-over-https) with HTTPS. |
 | New in 0.2.1 | Console fixes: conflicts shown row by row with by-column settling, plain-word table names, "?" rows for tables Postgres hasn't analyzed. |
 | New in 0.2.2 | Install fixes: the installer shows the setup code the log shows, logs without color codes under systemd and Docker, and a connection check that says what to do with a self-signed Postgres certificate. |
-| New in 0.2.8 | **Fixes a privacy bug:** when a merge met a conflict with Postgres, whoever held the approval link was answered with the rows involved, including columns your labels hide. Now they are told what happened in words. Upgrade if approval links go to anyone who shouldn't see every column. |
+| New in 0.2.9 | **Fixes sign-in for approvers:** people allowed only by a group (`group:` in `GATEWAY_OIDC_ALLOW`) can now approve. Signing out now holds, and someone refused can sign in with another account. |
 | New in 0.2.7 | A new look for the console, the approval widget and the approval pages. The widget's default accent is now lime: a page that set `--chronos-accent` keeps its colour and white text on it, and `--chronos-on-accent` sets that text. |
 | New in 0.2.6 | Signed downloads: each binary and the image are signed with cosign (keyless, Sigstore) by Chronos's release account. `CHRONOS_VERIFY=1` makes the installer check the signatures of both the gateway and its engine; [check the image](#check-the-images-signature) with `cosign verify`. |
 | New in 0.2.5 | A run is held only by its own tenant's rows (engine 0.4.6): another tenant's rows changing, in Postgres or by a refresh, no longer hold a run that read the same tables, and a run that read a child table of more than 100,000 rows can be checked, so it needs no `skip_read_check`. |
@@ -147,7 +147,7 @@ To install one exact release, use that release's own installer. It also names th
 with:
 
 ```bash
-curl -fsSL https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.8/install.sh | sudo sh -s -- --service
+curl -fsSL https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.9/install.sh | sudo sh -s -- --service
 ```
 
 Installer options:
@@ -157,7 +157,7 @@ Installer options:
 | `--service` | Install as a systemd service (Linux, root). Without it: only the binaries. |
 | `--uninstall` | Remove the service and the binaries. Keeps the data and the settings. |
 | `CHRONOS_GATEWAY_PREFIX` | Where the binaries go. Default `/usr/local` as root, else `~/.local`. |
-| `CHRONOS_GATEWAY_VERSION` | A release tag such as `v0.2.8`. Default: the release the script came from. |
+| `CHRONOS_GATEWAY_VERSION` | A release tag such as `v0.2.9`. Default: the release the script came from. |
 | `CHRONOS_VERIFY=1` | Also check each download's signature with cosign (gateway 0.2.6 and later; the engine it bundles is signed too). |
 | `CHRONOS_GATEWAY_BASE_URL`, `CHRONOS_ENGINE_BASE_URL` | Download from a mirror instead of GitHub. |
 
@@ -166,7 +166,7 @@ Installer options:
 
 ### 2. Docker
 
-The image is `ghcr.io/abhishekxdg/chronos-gateway`. Tags: `0.2.8`, `0.2.7`, `0.2.6`, `0.2.5`, `0.2.4`, `0.2.3`, `0.2.2`, `0.2.1`, `0.2.0`, `0.1.1`, `0.1.0` and `latest`, each for `linux/amd64`
+The image is `ghcr.io/abhishekxdg/chronos-gateway`. Tags: `0.2.9`, `0.2.8`, `0.2.7`, `0.2.6`, `0.2.5`, `0.2.4`, `0.2.3`, `0.2.2`, `0.2.1`, `0.2.0`, `0.1.1`, `0.1.0` and `latest`, each for `linux/amd64`
 and `linux/arm64`. It holds both programs on a distroless base (no shell), runs as user 65532, and keeps its data in
 `/data`.
 
@@ -174,7 +174,7 @@ and `linux/arm64`. It holds both programs on a distroless base (no shell), runs 
 docker run -d --name chronos-gateway --restart unless-stopped \
   -p 127.0.0.1:7400:7400 \
   -v chronos-gateway:/data \
-  ghcr.io/abhishekxdg/chronos-gateway:0.2.8
+  ghcr.io/abhishekxdg/chronos-gateway:0.2.9
 docker logs chronos-gateway     # the setup code; then open http://localhost:7400/console
 ```
 
@@ -190,7 +190,7 @@ docker logs chronos-gateway     # the setup code; then open http://localhost:740
 From 0.2.6, each image is signed with cosign (keyless) by Chronos's release account. To check it before you run it:
 
 ```bash
-cosign verify ghcr.io/abhishekxdg/chronos-gateway:0.2.8 \
+cosign verify ghcr.io/abhishekxdg/chronos-gateway:0.2.9 \
   --certificate-identity chronos-release@project-7a947b34-cb98-4716-8f2.iam.gserviceaccount.com \
   --certificate-oidc-issuer https://accounts.google.com
 ```
@@ -203,7 +203,7 @@ capabilities, and the port on this machine only.
 ```bash
 mkdir chronos-gateway && cd chronos-gateway
 curl -fsSLO https://raw.githubusercontent.com/Abhishekxdg/chronos-gateway-releases/main/compose.yaml
-echo 'GATEWAY_VERSION=0.2.8' > .env
+echo 'GATEWAY_VERSION=0.2.9' > .env
 docker compose up -d
 docker compose logs gateway     # the setup code; then open http://localhost:7400/console
 ```
@@ -502,12 +502,14 @@ provider (Okta, Microsoft Entra ID, Google Workspace, Keycloak, Auth0, ...):
 `GATEWAY_OIDC_ALLOW` is required. It takes emails (`ada@acme.com`), whole domains (`@acme.com`) and groups
 (`group:db-approvers`, from the ID token's `groups` claim, or the claim `GATEWAY_OIDC_GROUPS_CLAIM` names). Anyone
 else your provider signs in is refused. A decision made signed in records the person in `approved_by`
-(`{"person": {"email", "name", "sub"}, "via": "sso"}`), in the `merge.landed` webhook and on the world.
+(`{"person": {"email", "name", "sub"}, "via": "sso"}`), in the `merge.landed` webhook and on the world. Someone
+refused sees why and can sign in with another account; the log names the setting.
 
 With SSO set up:
 
 - `POST /v1/runs/:id/approvals` takes `"approver": "ada@acme.com"`: that link works only for Ada, signed in. Anyone
-  else who opens it is asked to sign in, and then refused.
+  else who opens it is asked to sign in, and then refused. With no group on your lists, an email they don't name is
+  refused here; with a group, the gateway can't know until that person signs in, and checks them then.
 - `GATEWAY_OIDC_REQUIRE=on` makes every approval link need someone on the allow list, signed in. Links for your
   end users, in the widget on your own site, then stop working: sign-ins are on the gateway's own pages only, and
   the widget on another site can't send the gateway's cookie.
@@ -516,7 +518,9 @@ With SSO set up:
 
 A sign-in lasts 12 hours (`GATEWAY_OIDC_SESSION_TTL`). It is a cookie (`HttpOnly`, `SameSite=Lax`, and `Secure`
 when `GATEWAY_PUBLIC_URL` is `https://`). The gateway keeps only its hash, and checks the person against the allow
-list on every request, so removing someone from `GATEWAY_OIDC_ALLOW` and restarting ends their access. The gateway
+list on every request, so removing someone from `GATEWAY_OIDC_ALLOW` and restarting ends their access. Signing out
+ends the sign-in here, not the person's session at your provider, so the next sign-in in that browser asks your
+provider who's there (`prompt=login`, or `select_account` on Google). The gateway
 checks the ID token's signature against your provider's published keys, its issuer, audience, expiry and nonce, and
 uses PKCE. It reads the provider's settings the first time someone signs in, so it starts even while the provider
 is down.
