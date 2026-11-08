@@ -1,0 +1,148 @@
+{{- include "gateway.validate" . }}
+{{- $publicUrl := include "gateway.publicUrl" . }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "gateway.name" . }}
+  labels: {{- include "gateway.labels" . | nindent 4 }}
+spec:
+  # one: the engine's folder has one writer (a restart takes seconds)
+  replicas: 1
+  serviceName: {{ include "gateway.name" . }}
+  selector:
+    matchLabels: {{- include "gateway.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gateway.selector" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        {{- if include "gateway.ownSecret" . }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "gateway.serviceAccount" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: gateway
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["serve"]
+          env:
+            - { name: GATEWAY_DATA, value: /data }
+            - { name: GATEWAY_LISTEN, value: "0.0.0.0:7400" }
+            {{- with $publicUrl }}
+            - { name: GATEWAY_PUBLIC_URL, value: {{ . | quote }} }
+            {{- end }}
+            {{- with .Values.allowedOrigins }}
+            - { name: GATEWAY_ALLOWED_ORIGINS, value: {{ join "," . | quote }} }
+            {{- end }}
+            {{- if include "gateway.hasPostgres" . }}
+            # the Postgres URL: a file from the Secret, copied by the gateway into /data (600); never an env value
+            - { name: GATEWAY_SOURCE_FILE, value: /secrets/postgres/postgres-url }
+            {{- with .Values.postgres.tables }}
+            - { name: GATEWAY_TABLES, value: {{ join "," . | quote }} }
+            {{- end }}
+            {{- with .Values.postgres.tenantColumn }}
+            - { name: GATEWAY_TENANT_COLUMN, value: {{ . | quote }} }
+            {{- end }}
+            {{- end }}
+            {{- if .Values.postgres.follow }}
+            - { name: GATEWAY_FOLLOW, value: "on" }
+            {{- end }}
+            {{- with .Values.sso }}
+            {{- if .issuer }}
+            - { name: GATEWAY_OIDC_ISSUER, value: {{ .issuer | quote }} }
+            - { name: GATEWAY_OIDC_CLIENT_ID, value: {{ .clientId | quote }} }
+            - name: GATEWAY_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: { name: {{ include "gateway.ssoSecret" $ }}, key: clientSecret }
+            - { name: GATEWAY_OIDC_ALLOW, value: {{ join "," .allow | quote }} }
+            {{- with .admins }}
+            - { name: GATEWAY_OIDC_ADMINS, value: {{ join "," . | quote }} }
+            {{- end }}
+            {{- with .groupsClaim }}
+            - { name: GATEWAY_OIDC_GROUPS_CLAIM, value: {{ . | quote }} }
+            {{- end }}
+            {{- if .require }}
+            - { name: GATEWAY_OIDC_REQUIRE, value: "on" }
+            {{- end }}
+            {{- end }}
+            {{- end }}
+            {{- range $k, $v := .Values.env }}
+            - { name: {{ $k }}, value: {{ $v | toString | quote }} }
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - { name: api, containerPort: 7400 }
+          # the first start may attach large tables before it answers: up to 10 minutes
+          startupProbe:
+            httpGet: { path: /health, port: api }
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /health, port: api }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: api }
+            periodSeconds: 30
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: tmp, mountPath: /tmp }
+            {{- if include "gateway.hasPostgres" . }}
+            - { name: postgres, mountPath: /secrets/postgres, readOnly: true }
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if include "gateway.hasPostgres" . }}
+        - name: postgres
+          secret:
+            secretName: {{ include "gateway.postgresSecret" . }}
+            defaultMode: 0440
+            items:
+              - { key: postgresUrl, path: postgres-url }
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size }}

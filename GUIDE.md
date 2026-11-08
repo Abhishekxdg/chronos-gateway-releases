@@ -28,7 +28,7 @@ unless you set up webhooks or link it to Chronos Cloud (both optional).
 
 - [How it works](#how-it-works)
 - [Requirements](#requirements)
-- [Install](#install): installer, Docker, Docker Compose, your own domain
+- [Install](#install): installer, Docker, Docker Compose, Kubernetes (Helm), your own domain
 - [Set it up in the console](#set-it-up-in-the-console)
 - [Your first key](#your-first-key)
 - [Connect your Postgres](#connect-your-postgres)
@@ -103,7 +103,7 @@ The gateway is two programs:
 
 ## Install
 
-Pick one of three ways. Each gives you the same two programs and the same API on port 7400. On its first start
+Pick one of four ways. Each gives you the same two programs and the same API on port 7400. On its first start
 the gateway prints a **setup code**: open its console, enter the code, and the console walks you through the rest
 ([Set it up in the console](#set-it-up-in-the-console)).
 
@@ -211,6 +211,37 @@ docker compose logs gateway     # the setup code; then open http://localhost:740
 Compose reads settings from `.env` in the same folder: `GATEWAY_VERSION` (default `latest`), `GATEWAY_DOMAIN`,
 `GATEWAY_PUBLIC_URL`, `GATEWAY_ALLOWED_ORIGINS`, `GATEWAY_TABLES` and `GATEWAY_TENANT_COLUMN`. The file also has
 commented lines for passing the Postgres URL as a secret file (see [Connect at start](#connect-at-start-instead)).
+
+### 4. Kubernetes (Helm)
+
+The Helm chart runs the same image as a StatefulSet: one pod, its data on one volume (`20Gi` by default), as uid
+65532 with a read-only root filesystem and no Linux capabilities, reachable inside the cluster only until you give
+it an address. Kubernetes 1.25 or newer.
+
+```bash
+helm install chronos-gateway \
+  https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.9/chronos-gateway-0.2.9.tgz \
+  --namespace chronos --create-namespace
+kubectl -n chronos logs statefulset/chronos-gateway | grep -A4 'Set up Chronos Gateway'   # the setup code
+kubectl -n chronos port-forward svc/chronos-gateway 7400:7400   # then open http://localhost:7400/console
+```
+
+The install prints these commands too. Settings go in a values file (`helm install ... -f values.yaml`); the chart's
+[`values.yaml`](https://github.com/Abhishekxdg/chronos-gateway-releases/blob/main/helm/chronos-gateway/values.yaml)
+explains each one. The ones most installs set:
+
+| Value | What it does |
+|---|---|
+| `ingress.enabled`, `ingress.host`, `ingress.className` | HTTPS on your own domain through your ingress controller (TLS ends there; the certificate's Secret is `<release>-tls` unless `ingress.tls.secretName` names one, or cert-manager makes it from `ingress.annotations`). Sets `GATEWAY_PUBLIC_URL` to `https://<host>`. |
+| `publicUrl` | The whole address people and agents reach, when it isn't the ingress's (an internal load balancer, say). Without it or the ingress, the gateway's links say `http://localhost:7400`, which only works through `port-forward`. |
+| `postgres.existingSecret`, `postgres.tables`, `postgres.tenantColumn` | [Connect at start](#connect-at-start-instead): a Secret of yours with the URL under the key `postgresUrl` (`kubectl -n chronos create secret generic chronos-postgres --from-file=postgresUrl=postgres-url.txt`), mounted as a file, never an environment value. |
+| `sso.*` | [Single sign-on](#approve-a-held-change) for approvers and the console: `issuer`, `clientId`, `existingSecret` (the client secret under the key `clientSecret`), `allow`, `admins`. Needs an `https://` address. |
+| `env` | Any other `GATEWAY_*` setting from [Configuration](#configuration), such as `GATEWAY_POLICY_RULES` or `GATEWAY_HOLD_TTL`. |
+| `networkPolicy.enabled` | Off by default. On, the pod takes calls on 7400 from its own namespace (`networkPolicy.ingressFrom`) and reaches only your Postgres (`networkPolicy.postgres.cidrs`, which it then needs), DNS, and port 443 on `networkPolicy.https.cidrs` (your sign-on provider, webhook targets). |
+
+Run the commands in this guide in the pod: `kubectl -n chronos exec statefulset/chronos-gateway -- chronos-gateway
+keys create backend`. Settings the chart can't use together (tables without a Postgres, sign-on without an `https://`
+address) fail the install with a sentence saying what to set.
 
 ### On your own domain, over HTTPS
 
@@ -837,6 +868,7 @@ Back up the data folder first. Upgrades keep settings, data and keys.
 | Installer, binaries only | Run the same command again, then restart your `chronos-gateway`. |
 | Docker | `docker pull ghcr.io/abhishekxdg/chronos-gateway:<version>`, then `docker rm -f chronos-gateway` and run the same `docker run` command with the new tag. The volume carries over. |
 | Docker Compose | Set the new `GATEWAY_VERSION` in `.env`, then `docker compose pull && docker compose up -d`. |
+| Helm | `helm upgrade chronos-gateway <the new release's chart URL> -n chronos --reuse-values`. The volume carries over. |
 
 Check the result with `chronos-gateway --version` (Docker: `docker exec chronos-gateway chronos-gateway --version`).
 The bundled engine answers `--version` too:
@@ -846,6 +878,7 @@ The bundled engine answers `--version` too:
 | Installer, `--service` | `/usr/local/lib/chronos-gateway/chronos --version` |
 | Installer, binaries only | `~/.local/lib/chronos-gateway/chronos --version` |
 | Docker | `docker exec chronos-gateway chronos --version` |
+| Helm | `kubectl -n chronos exec statefulset/chronos-gateway -- chronos --version` |
 
 ## Uninstalling
 
@@ -862,6 +895,8 @@ sudo rm -rf /var/lib/chronos-gateway /etc/chronos-gateway && sudo userdel chrono
 
 For a binaries-only install, run the first command with `sh` instead of `sudo sh`, and delete your data folder
 yourself. For Docker: `docker rm -f chronos-gateway`, and `docker volume rm chronos-gateway` to delete the data.
+For Helm: `helm uninstall chronos-gateway -n chronos` keeps the volume; `kubectl -n chronos delete pvc
+data-chronos-gateway-0` deletes the data.
 
 The tables you attached stay as they were. The gateway's role and the `chronos` schema stay in Postgres until you
 drop them.

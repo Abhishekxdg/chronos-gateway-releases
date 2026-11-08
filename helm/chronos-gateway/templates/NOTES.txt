@@ -1,0 +1,21 @@
+{{- $name := include "gateway.name" . }}
+{{- $url := include "gateway.publicUrl" . | default "http://localhost:7400" }}
+Chronos Gateway {{ .Values.image.tag | default .Chart.AppVersion }} is starting in {{ .Release.Namespace }}.
+
+1. The setup code (first start only):
+     kubectl -n {{ .Release.Namespace }} logs statefulset/{{ $name }} | grep -A4 'Set up Chronos Gateway'
+   Lost it, or it expired? A new one:
+     kubectl -n {{ .Release.Namespace }} exec statefulset/{{ $name }} -- chronos-gateway setup-code
+
+2. Open the console at {{ $url }}/console and enter the code.
+{{- if not (include "gateway.publicUrl" .) }}
+     kubectl -n {{ .Release.Namespace }} port-forward svc/{{ $name }} 7400:{{ .Values.service.port }}
+   The console only answers at its public address, http://localhost:7400 here. Before your backend or agents use
+   it from elsewhere, set publicUrl (or turn on the ingress) to the address they reach.
+{{- end }}
+
+3. A developer key for your backend, from the console or:
+     kubectl -n {{ .Release.Namespace }} exec statefulset/{{ $name }} -- chronos-gateway keys create backend
+
+Inside the cluster it answers at http://{{ $name }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}.
+Back up the volume data-{{ $name }}-0 with your Postgres: it holds the gateway's store and the engine's folder.

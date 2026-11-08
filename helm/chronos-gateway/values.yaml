@@ -1,0 +1,111 @@
+# Chronos Gateway on Kubernetes: the gateway and the engine it runs, in one pod, its data on one volume. Nothing
+# leaves your cluster unless you set up webhooks or single sign-on. See GUIDE.md, "Kubernetes (Helm)".
+#
+# The first start prints a setup code to the pod's log: open the console, enter it, and the console walks you through
+# the rest (Postgres, the rules, keys). No password ships with the chart.
+
+image:
+  repository: ghcr.io/abhishekxdg/chronos-gateway
+  tag: ""          # the chart's appVersion when empty
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# How browsers, your backend and agents reach the gateway (GATEWAY_PUBLIC_URL). It goes into the URLs the gateway
+# hands out (sql_url, mcp_url, approval links), and the console only answers pages opened at this address.
+# Empty: https://<ingress.host> when the ingress is on, else the gateway's own default, http://localhost:7400, which
+# is what `kubectl port-forward svc/<release> 7400` gives you. Set it before agents outside this machine use it.
+publicUrl: ""
+
+# Web origins allowed to call the approval endpoints from a browser (the widget), e.g. ["https://app.example.com"]
+allowedOrigins: []
+
+# Optional: connect Postgres at the first start instead of in the console. The URL is mounted as a file
+# (GATEWAY_SOURCE_FILE), never an environment value, and is copied into the data folder at each start (so a new
+# password in the Secret is picked up at the next restart).
+postgres:
+  # a Secret of your own with the URL under the key postgresUrl:
+  #   kubectl create secret generic chronos-postgres --from-file=postgresUrl=postgres-url.txt
+  existingSecret: ""
+  # or the URL itself (it ends up in Helm's release record: prefer existingSecret)
+  url: ""
+  # the tables agents may work on, attached at the first start (needs existingSecret or url)
+  tables: []
+  # the column naming each row's tenant (org_id, account_id, ...)
+  tenantColumn: ""
+  # also take Postgres's changes about a second after they commit (a logical replication slot; see GUIDE.md)
+  follow: false
+
+# Optional: single sign-on (OpenID Connect) for approvers and the console. Register <publicUrl>/sso/callback as the
+# redirect URI at your provider. Needs an https:// publicUrl (or the ingress, with TLS).
+sso:
+  issuer: ""               # https://acme.okta.com
+  clientId: ""
+  # a Secret of your own with the client secret under the key clientSecret, or the secret itself (prefer the Secret)
+  existingSecret: ""
+  clientSecret: ""
+  allow: []                # who may approve: ["@acme.com", "group:db-approvers"] (required with sso.issuer)
+  admins: []               # who may sign in to the console and change settings, in the same form
+  groupsClaim: ""          # default groups (roles with Entra ID app roles)
+  require: false           # every approval link needs someone on the allow list, signed in
+
+# Any other GATEWAY_* setting from GUIDE.md's Configuration table, as plain values:
+#   env:
+#     GATEWAY_POLICY_RULES: "max_rows = 200, max_deletes = 0"
+#     GATEWAY_HOLD_TTL: 1d
+env: {}
+# Settings taken from Secrets or ConfigMaps, as container env entries (valueFrom ...)
+extraEnv: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}          # e.g. eks.amazonaws.com/role-arn for IAM roles for service accounts
+
+service:
+  type: ClusterIP
+  port: 7400
+  annotations: {}
+
+# HTTPS on your own domain through your ingress controller. TLS ends at the ingress: the gateway itself serves plain
+# HTTP inside the cluster.
+ingress:
+  enabled: false
+  className: ""            # nginx, alb, ...
+  annotations: {}          # cert-manager.io/cluster-issuer: letsencrypt, alb.ingress.kubernetes.io/scheme: internal, ...
+  host: ""                 # gateway.example.com
+  tls:
+    enabled: true
+    secretName: ""         # the certificate's Secret; empty: <release>-tls
+
+persistence:
+  # the gateway's store, its keys, and the engine's folder: back it up with your Postgres
+  size: 20Gi
+  storageClass: ""
+
+resources:
+  requests: { cpu: 250m, memory: 512Mi }
+  limits: { memory: 2Gi }
+
+networkPolicy:
+  # Off by default: a NetworkPolicy takes addresses, not names, and the chart can't know your Postgres's. Turn it on
+  # with the addresses filled in.
+  enabled: false
+  postgres:
+    cidrs: []              # ["10.0.12.5/32"]
+    port: 5432
+  # HTTPS egress: your single sign-on provider and webhook targets
+  https:
+    cidrs: []              # ["203.0.113.10/32"]
+  dns:
+    namespace: kube-system
+    podLabels: { k8s-app: kube-dns }
+  # who may call the gateway (port 7400): pods in this namespace by default. With the ingress on, add your ingress
+  # controller's namespace, e.g. - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ingress-nginx } }
+  ingressFrom:
+    - podSelector: {}
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

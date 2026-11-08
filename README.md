@@ -66,7 +66,7 @@ More in [How it works](GUIDE.md#how-it-works).
 
 ## Deploy in 1 minute
 
-Pick one. All three give you the same API on port `7400`, and an admin console at `/console` that walks you through
+Pick one. All four give you the same API on port `7400`, and an admin console at `/console` that walks you through
 the rest: connect Postgres, set the rules, review and approve what agents change.
 
 ### Docker (easiest, any OS)
@@ -101,6 +101,19 @@ docker compose logs gateway              # a setup code: open https://gateway.ex
 ```
 
 Leave out the domain and `--profile https` to run it on this machine only.
+
+### Kubernetes (Helm)
+
+```bash
+helm install chronos-gateway \
+  https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.9/chronos-gateway-0.2.9.tgz \
+  --namespace chronos --create-namespace
+kubectl -n chronos logs statefulset/chronos-gateway | grep -A4 'Set up Chronos Gateway'   # a setup code
+kubectl -n chronos port-forward svc/chronos-gateway 7400:7400   # then open http://localhost:7400/console
+```
+
+One pod, its data on one volume, no password shipped: [Kubernetes (Helm)](GUIDE.md#4-kubernetes-helm) has the
+settings for your domain, Postgres at start and single sign-on.
 
 ### Then, in your browser
 
