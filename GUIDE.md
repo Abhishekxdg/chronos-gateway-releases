@@ -10,12 +10,13 @@ unless you set up webhooks or link it to Chronos Cloud (both optional).
 
 | | |
 |---|---|
-| Current release | **0.2.10** ([release notes](https://github.com/Abhishekxdg/chronos-gateway-releases/releases)) |
-| Engine it bundles | Chronos **0.4.9** ([release](https://github.com/Abhishekxdg/Chronos-DB/releases/tag/v0.4.9)) |
+| Current release | **0.2.11** ([release notes](https://github.com/Abhishekxdg/chronos-gateway-releases/releases)) |
+| Engine it bundles | Chronos **0.4.10** ([release](https://github.com/Abhishekxdg/Chronos-DB/releases/tag/v0.4.10)) |
 | Status | Early (0.2). Try it on a staging copy of your database first. |
 | New in 0.2.0 | [The console](#the-console): set it up, review and approve, and change the rules in your browser; [your own domain](#on-your-own-domain-over-https) with HTTPS. |
 | New in 0.2.1 | Console fixes: conflicts shown row by row with by-column settling, plain-word table names, "?" rows for tables Postgres hasn't analyzed. |
 | New in 0.2.2 | Install fixes: the installer shows the setup code the log shows, logs without color codes under systemd and Docker, and a connection check that says what to do with a self-signed Postgres certificate. |
+| New in 0.2.11 | **An AI reviewer before a person:** any OpenAI-compatible model decides held merges first; it is shown structure, not row text, and the engine refuses its approval of person-only holds. Runs take `row_rules`, and policies take the engine 0.4.10 rules (`trusted_columns`, `watch_totals`, `canary`, `effects_delay`, `max_unusual` and more). See [An AI reviewer before a person](#an-ai-reviewer-before-a-person). |
 | New in 0.2.10 | **Runs write as your end user:** `act_as` on `POST /v1/runs` names a Postgres role and settings (such as `request.jwt.claims`), and the run's merge is written after `SET LOCAL ROLE`, so your grants and row-level security decide what it may write (engine 0.4.9). Once, in Postgres: `GRANT authenticated TO <the role the gateway connects as>`. |
 | New in 0.2.9 | **Fixes sign-in for approvers:** people allowed only by a group (`group:` in `GATEWAY_OIDC_ALLOW`) can now approve. Signing out now holds, and someone refused can sign in with another account. |
 | New in 0.2.7 | A new look for the console, the approval widget and the approval pages. The widget's default accent is now lime: a page that set `--chronos-accent` keeps its colour and white text on it, and `--chronos-on-accent` sets that text. |
@@ -39,6 +40,7 @@ unless you set up webhooks or link it to Chronos Cloud (both optional).
 - [Use it from your code](#use-it-from-your-code)
 - [API at a glance](#api-at-a-glance)
 - [Configuration](#configuration)
+- [An AI reviewer before a person](#an-ai-reviewer-before-a-person)
 - [Security model](#security-model)
 - [Running it in production](#running-it-in-production)
 - [Upgrading](#upgrading)
@@ -148,7 +150,7 @@ To install one exact release, use that release's own installer. It also names th
 with:
 
 ```bash
-curl -fsSL https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.10/install.sh | sudo sh -s -- --service
+curl -fsSL https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.11/install.sh | sudo sh -s -- --service
 ```
 
 Installer options:
@@ -158,7 +160,7 @@ Installer options:
 | `--service` | Install as a systemd service (Linux, root). Without it: only the binaries. |
 | `--uninstall` | Remove the service and the binaries. Keeps the data and the settings. |
 | `CHRONOS_GATEWAY_PREFIX` | Where the binaries go. Default `/usr/local` as root, else `~/.local`. |
-| `CHRONOS_GATEWAY_VERSION` | A release tag such as `v0.2.10`. Default: the release the script came from. |
+| `CHRONOS_GATEWAY_VERSION` | A release tag such as `v0.2.11`. Default: the release the script came from. |
 | `CHRONOS_VERIFY=1` | Also check each download's signature with cosign (gateway 0.2.6 and later; the engine it bundles is signed too). |
 | `CHRONOS_GATEWAY_BASE_URL`, `CHRONOS_ENGINE_BASE_URL` | Download from a mirror instead of GitHub. |
 
@@ -167,7 +169,7 @@ Installer options:
 
 ### 2. Docker
 
-The image is `ghcr.io/abhishekxdg/chronos-gateway`. Tags: `0.2.10`, `0.2.9`, `0.2.8`, `0.2.7`, `0.2.6`, `0.2.5`, `0.2.4`, `0.2.3`, `0.2.2`, `0.2.1`, `0.2.0`, `0.1.1`, `0.1.0` and `latest`, each for `linux/amd64`
+The image is `ghcr.io/abhishekxdg/chronos-gateway`. Tags: `0.2.11`, `0.2.10`, `0.2.9`, `0.2.8`, `0.2.7`, `0.2.6`, `0.2.5`, `0.2.4`, `0.2.3`, `0.2.2`, `0.2.1`, `0.2.0`, `0.1.1`, `0.1.0` and `latest`, each for `linux/amd64`
 and `linux/arm64`. It holds both programs on a distroless base (no shell), runs as user 65532, and keeps its data in
 `/data`.
 
@@ -175,7 +177,7 @@ and `linux/arm64`. It holds both programs on a distroless base (no shell), runs 
 docker run -d --name chronos-gateway --restart unless-stopped \
   -p 127.0.0.1:7400:7400 \
   -v chronos-gateway:/data \
-  ghcr.io/abhishekxdg/chronos-gateway:0.2.10
+  ghcr.io/abhishekxdg/chronos-gateway:0.2.11
 docker logs chronos-gateway     # the setup code; then open http://localhost:7400/console
 ```
 
@@ -191,7 +193,7 @@ docker logs chronos-gateway     # the setup code; then open http://localhost:740
 From 0.2.6, each image is signed with cosign (keyless) by Chronos's release account. To check it before you run it:
 
 ```bash
-cosign verify ghcr.io/abhishekxdg/chronos-gateway:0.2.10 \
+cosign verify ghcr.io/abhishekxdg/chronos-gateway:0.2.11 \
   --certificate-identity chronos-release@project-7a947b34-cb98-4716-8f2.iam.gserviceaccount.com \
   --certificate-oidc-issuer https://accounts.google.com
 ```
@@ -204,7 +206,7 @@ capabilities, and the port on this machine only.
 ```bash
 mkdir chronos-gateway && cd chronos-gateway
 curl -fsSLO https://raw.githubusercontent.com/Abhishekxdg/chronos-gateway-releases/main/compose.yaml
-echo 'GATEWAY_VERSION=0.2.10' > .env
+echo 'GATEWAY_VERSION=0.2.11' > .env
 docker compose up -d
 docker compose logs gateway     # the setup code; then open http://localhost:7400/console
 ```
@@ -221,7 +223,7 @@ it an address. Kubernetes 1.25 or newer.
 
 ```bash
 helm install chronos-gateway \
-  https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.10/chronos-gateway-0.2.10.tgz \
+  https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.11/chronos-gateway-0.2.11.tgz \
   --namespace chronos --create-namespace
 kubectl -n chronos logs statefulset/chronos-gateway | grep -A4 'Set up Chronos Gateway'   # the setup code
 kubectl -n chronos port-forward svc/chronos-gateway 7400:7400   # then open http://localhost:7400/console
@@ -572,8 +574,8 @@ curl -s localhost:7400/v1/webhooks -H "Authorization: Bearer $KEY" -H 'Content-T
   -d '{"url": "https://app.example.com/hooks/chronos"}'
 ```
 
-Events: `run.created`, `merge.landed`, `merge.held`, `merge.conflict`, `merge.rejected`, `run.expired`,
-`run.discarded`, `run.failed`, and `run.refused` (a tenant went past its hourly run limit). Send `"events": [...]` to
+Events: `run.created`, `merge.landed`, `merge.held`, `merge.reviewed` (the [AI reviewer](#an-ai-reviewer-before-a-person)'s
+verdict), `merge.conflict`, `merge.rejected`, `run.expired`, `run.discarded`, `run.failed`, and `run.refused` (a tenant went past its hourly run limit). Send `"events": [...]` to
 take only some. Each delivery is a JSON `POST` with a `Chronos-Event-Id` header and a
 `Chronos-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>">` header. Check it on the raw body with the
 clients' `verify_signature` (Python) or `verifySignature` (TypeScript). A delivery that doesn't get a 2xx answer is
@@ -743,6 +745,82 @@ people decide there. The Postgres URL and the engine's admin token never cross t
 | `GATEWAY_OIDC_GROUPS_CLAIM` | `groups` | The ID token's claim that lists a person's groups (`roles` with Entra ID app roles). |
 | `GATEWAY_OIDC_REQUIRE` | off | `on`: every approval link needs a person on the allow list, signed in. Off: only links made for an `approver`. |
 | `GATEWAY_OIDC_SESSION_TTL` | `12h` | How long a sign-in lasts. |
+
+### AI reviewer
+
+A model decides each held change before a person does ([below](#an-ai-reviewer-before-a-person)). Unset: people
+decide them all.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `GATEWAY_REVIEWER_URL` | unset | An OpenAI-compatible API's base: `https://api.openai.com/v1`, `http://localhost:11434/v1` (Ollama), `http://vllm:8000/v1`. Plain `http` only to this machine, or without a key. |
+| `GATEWAY_REVIEWER_MODEL` | unset, required | The model to ask. Any model works, hosted or open-weight. |
+| `GATEWAY_REVIEWER_KEY` | unset | Its API key, sent as a bearer token. |
+| `GATEWAY_REVIEWER_MODEL_2` | unset | A second model on the same API. Both must approve, at the confidence below, for a change to merge. |
+| `GATEWAY_REVIEWER_MIN_CONFIDENCE` | `0.8` | An approval less sure than this goes to a person. |
+| `GATEWAY_REVIEWER_INSTRUCTIONS` | unset | Your rules for its decisions, in words. `GATEWAY_REVIEWER_INSTRUCTIONS_FILE` reads them from a file. |
+| `GATEWAY_REVIEWER_MAX_ROWS` | `100` | The most changed rows it's shown. |
+| `GATEWAY_REVIEWER_COLUMNS` | unset | Columns whose text the model reads as it is: `leads.name,leads.stage`, `leads.*`, or `*`. Other text it sees only as a placeholder. |
+| `GATEWAY_REVIEWER_AGENT` | `gateway_reviewer` | The engine agent it decides as. |
+
+## An AI reviewer before a person
+
+With agents running on their own, most held changes are routine, and a person can't read them all. Set
+`GATEWAY_REVIEWER_URL` and `GATEWAY_REVIEWER_MODEL`, and a model reads each held change first. It approves it (merged
+into Postgres as it was held), rejects it, or passes it on. A person sees only what the model rejected or passed,
+with the model's reason beside the rules' reasons.
+
+```bash
+GATEWAY_REVIEWER_URL=http://localhost:11434/v1 GATEWAY_REVIEWER_MODEL=qwen3:32b \
+GATEWAY_REVIEWER_INSTRUCTIONS='Refunds over 200 need a person. Never reassign accounts between tenants.' \
+  chronos-gateway serve
+```
+
+Pair it with policy rules made for it (engine 0.5):
+
+- `review_every = true`: every change goes to the reviewer, even one within the rules.
+- `row_rules`: limits on values (`payments: new.amount >= -50`).
+- `all_rows_per_hour`: a breaker across all runs.
+- `untrusted_columns`: columns outsiders write. `'*'` makes every text column untrusted, with `trusted_columns` as the
+  exceptions. Rows an agent writes after reading such text are tainted, and reading them counts as reading it.
+- `watch_totals` and `max_shift`: queries such as `select sum(amount) from payments`, run before and after each change.
+  A change that moves one further than `max_shift` percent waits for a person.
+- `canary` and `canary_wait`: a big change lands only that many rows first. The rest lands when it's merged again after
+  the wait.
+- `effects_delay`: emails, webhooks and payments a change queues wait this long. An undo meanwhile takes them back unsent.
+- `max_unusual`: a change that many times bigger than the runs' usual size waits.
+- `spot_check`: a person still sees one change in so many.
+
+A run can add its own `row_rules` when it's created (`POST /v1/runs`). They hold on top of the policy's and can only
+make it stricter.
+
+**What the model can't do.** The engine decides this, not the gateway or the model:
+
+- **Its own engine agent.** It decides as `gateway_reviewer`, an engine agent that may only read and has no `unmask`. The gateway makes it and names it as the policy's `reviewer`.
+- **Holds only a person may approve.** By default the engine refuses its approval of a change held for deletes, schema changes, outside text, the all-runs limits, a spot check or a watched total. The policy's `person_only` sets which (`'none'`: the model may approve any). Those go to a person with the reason, and the model isn't asked.
+- **Only what it was shown.** A change written to after it was held is refused too.
+- **No answer is never an approval.** The model fails three times, answers out of form, or is less sure than `GATEWAY_REVIEWER_MIN_CONFIDENCE`: the change goes to a person.
+
+**What the model is sent:**
+
+- the run's intent;
+- why the change was held, as the engine tells an agent: with no values in it;
+- counts per table;
+- up to `GATEWAY_REVIEWER_MAX_ROWS` changed rows, as the reviewer agent reads them, structure only.
+
+In those rows, numbers, true/false, empty values and one-word values (a status, a date, an email, an id) are shown as
+they are. Text from columns in `GATEWAY_REVIEWER_COLUMNS` is shown too, cut to 300 characters. Any other text is a
+placeholder: `{"text": "#3", "chars": 214}`. The same text gets the same placeholder within one review, so the
+model still sees what changed and what equals what. Each update also lists the columns it changes. Columns in
+`untrusted_columns` are always placeholders, even when allowed, and masked columns stay masked.
+
+So words an outsider wrote reach the model only from columns you allowed. The model is also told that everything in
+the change is data, and to reject a change that tries to steer it. That lowers the risk; it doesn't remove it. What
+bounds a wrong approval is the engine's rules above. A hosted model receives what it is shown: to keep that in your
+network, use a model you run there.
+
+Every decision is in the engine's audit and the `merge.reviewed` webhook (`{run, world, version, verdict, reason,
+confidence, by: {reviewer, model}}`). An approval also sends `merge.landed` with `by: "reviewer"`.
 
 ## Security model
 

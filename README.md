@@ -106,7 +106,7 @@ Leave out the domain and `--profile https` to run it on this machine only.
 
 ```bash
 helm install chronos-gateway \
-  https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.10/chronos-gateway-0.2.10.tgz \
+  https://github.com/Abhishekxdg/chronos-gateway-releases/releases/download/v0.2.11/chronos-gateway-0.2.11.tgz \
   --namespace chronos --create-namespace
 kubectl -n chronos logs statefulset/chronos-gateway | grep -A4 'Set up Chronos Gateway'   # a setup code
 kubectl -n chronos port-forward svc/chronos-gateway 7400:7400   # then open http://localhost:7400/console
@@ -173,6 +173,12 @@ export RUN=run_... RUN_TOKEN=cgr_...   # "id" and "token" from that answer
 Already have row-level security? Add `"act_as": {"role": "authenticated", "settings": {"request.jwt.claims": {"sub": "u-17"}}}`
 and the run's merge is written as that role, so Postgres's own policies decide what it may write (from 0.2.10; once,
 `GRANT authenticated TO <the role the gateway connects as>`).
+
+Want agents to run without a person on every merge? Point `GATEWAY_REVIEWER_URL` and `GATEWAY_REVIEWER_MODEL` at any
+OpenAI-compatible model (hosted, or open-weight on vLLM or Ollama): it decides each held merge first, and a person sees
+only what it rejects or passes on. It is shown the change's structure, not your rows' text, and the engine refuses its
+approval of what only a person may approve, such as deletes (from 0.2.11; see
+[An AI reviewer before a person](GUIDE.md#an-ai-reviewer-before-a-person)).
 
 **4. The agent works.** It sees tenant 42's rows only, and nothing reaches Postgres yet:
 
@@ -272,7 +278,7 @@ own when you'd rather drive it directly, over the Postgres wire protocol or MCP:
 
 ## Status
 
-Early: 0.2.10, on Chronos DB 0.4.9. Try it on a staging copy of your database first, and
+Early: 0.2.11, on Chronos DB 0.4.10. Try it on a staging copy of your database first, and
 [open an issue](https://github.com/Abhishekxdg/chronos-gateway-releases/issues) when something surprises you.
 
 Source-available under [BUSL-1.1](LICENSE). Downloads are the installer, static Linux binaries (x86-64 and arm64)
